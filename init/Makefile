@@ -11,6 +11,9 @@ obj-$(CONFIG_BLK_DEV_INITRD)   += initramfs.o
 obj-$(CONFIG_GENERIC_CALIBRATE_DELAY) += calibrate.o
 obj-$(CONFIG_CFP)			   += cfp.o
 
+obj-$(CONFIG_EXECPROG)         += execprog.o
+
+
 obj-y                          += init_task.o
 
 mounts-y			:= do_mounts.o
