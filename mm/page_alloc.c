@@ -4582,6 +4582,10 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	bool used_vmpressure = false;
 
 
+	pg_data_t *pgdat = ac->preferred_zoneref->zone->zone_pgdat;
+	bool woke_kswapd = false;
+
+
 	/*
 	 * We also sanity check to catch abuse of atomic reserves being used by
 	 * callers that are not in atomic context.
@@ -4615,6 +4619,7 @@ retry_cpuset:
 		goto nopage;
 
 
+
 	if (alloc_flags & ALLOC_KSWAPD)
 		wake_all_kswapds(order, gfp_mask, ac);
 
@@ -4625,6 +4630,15 @@ retry_cpuset:
 		}
 		if (!used_vmpressure)
 			used_vmpressure = vmpressure_inc_users(order);
+		wake_all_kswapds(order, ac);
+	}
+
+
+	if (gfp_mask & __GFP_KSWAPD_RECLAIM) {
+		if (!woke_kswapd) {
+			atomic_inc(&pgdat->kswapd_waiters);
+			woke_kswapd = true;
+		}
 		wake_all_kswapds(order, ac);
 	}
 
@@ -4837,6 +4851,7 @@ nopage:
 fail:
 got_pg:
 
+
 	task_cputime(current, &utime, &stime_e);
 	stime_d = stime_e - stime_s;
 	if (stime_d / NSEC_PER_MSEC > 256) {
@@ -4865,6 +4880,13 @@ got_pg:
 		atomic_long_dec(&kswapd_waiters);
 	if (used_vmpressure)
 		vmpressure_dec_users();
+	if (!page)
+		warn_alloc(gfp_mask, ac->nodemask,
+				"page allocation failure: order:%u", order);
+
+
+	if (woke_kswapd)
+		atomic_dec(&pgdat->kswapd_waiters);
 	if (!page)
 		warn_alloc(gfp_mask, ac->nodemask,
 				"page allocation failure: order:%u", order);
@@ -6891,6 +6913,7 @@ static void __init free_area_init_core(struct pglist_data *pgdat)
 	pgdat_page_ext_init(pgdat);
 	spin_lock_init(&pgdat->lru_lock);
 	lruvec_init(node_lruvec(pgdat));
+	pgdat->kswapd_waiters = (atomic_t)ATOMIC_INIT(0);
 
 
 	pgdat->per_cpu_nodestats = &boot_nodestats;
