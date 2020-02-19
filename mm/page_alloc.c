@@ -4574,6 +4574,9 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	u64 utime, stime_s, stime_e, stime_d;
 
 	task_cputime(current, &utime, &stime_s);
+	pg_data_t *pgdat = ac->preferred_zoneref->zone->zone_pgdat;
+	bool woke_kswapd = false;
+
 
 	/*
 	 * We also sanity check to catch abuse of atomic reserves being used by
@@ -4607,8 +4610,18 @@ retry_cpuset:
 	if (!ac->preferred_zoneref->zone)
 		goto nopage;
 
+
 	if (alloc_flags & ALLOC_KSWAPD)
 		wake_all_kswapds(order, gfp_mask, ac);
+
+	if (gfp_mask & __GFP_KSWAPD_RECLAIM) {
+		if (!woke_kswapd) {
+			atomic_inc(&pgdat->kswapd_waiters);
+			woke_kswapd = true;
+		}
+		wake_all_kswapds(order, ac);
+	}
+
 
 	/*
 	 * The adjusted alloc_flags might result in immediate success, so try
@@ -4812,9 +4825,8 @@ nopage:
 		goto retry;
 	}
 fail:
-	warn_alloc(gfp_mask, ac->nodemask,
-			"page allocation failure: order:%u", order);
 got_pg:
+
 	task_cputime(current, &utime, &stime_e);
 	stime_d = stime_e - stime_s;
 	if (stime_d / NSEC_PER_MSEC > 256) {
@@ -4838,6 +4850,13 @@ got_pg:
 			a_anon << (PAGE_SHIFT-10), in_anon << (PAGE_SHIFT-10),
 			a_file << (PAGE_SHIFT-10), in_file << (PAGE_SHIFT-10));
 	}
+
+	if (woke_kswapd)
+		atomic_dec(&pgdat->kswapd_waiters);
+	if (!page)
+		warn_alloc(gfp_mask, ac->nodemask,
+				"page allocation failure: order:%u", order);
+
 	return page;
 }
 
@@ -6838,7 +6857,31 @@ static void __init free_area_init_core(struct pglist_data *pgdat)
 	enum zone_type j;
 	int nid = pgdat->node_id;
 
+
 	pgdat_init_internals(pgdat);
+
+	pgdat_resize_init(pgdat);
+#ifdef CONFIG_NUMA_BALANCING
+	spin_lock_init(&pgdat->numabalancing_migrate_lock);
+	pgdat->numabalancing_migrate_nr_pages = 0;
+	pgdat->numabalancing_migrate_next_window = jiffies;
+#endif
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	spin_lock_init(&pgdat->split_queue_lock);
+	INIT_LIST_HEAD(&pgdat->split_queue);
+	pgdat->split_queue_len = 0;
+#endif
+	init_waitqueue_head(&pgdat->kswapd_wait);
+	init_waitqueue_head(&pgdat->pfmemalloc_wait);
+#ifdef CONFIG_COMPACTION
+	init_waitqueue_head(&pgdat->kcompactd_wait);
+#endif
+	pgdat_page_ext_init(pgdat);
+	spin_lock_init(&pgdat->lru_lock);
+	lruvec_init(node_lruvec(pgdat));
+	pgdat->kswapd_waiters = (atomic_t)ATOMIC_INIT(0);
+
+
 	pgdat->per_cpu_nodestats = &boot_nodestats;
 
 	for (j = 0; j < MAX_NR_ZONES; j++) {

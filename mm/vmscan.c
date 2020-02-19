@@ -4078,10 +4078,13 @@ restart:
 			wake_up_all(&pgdat->pfmemalloc_wait);
 
 		/* Check if kswapd should be suspending */
+
 		__fs_reclaim_release();
 		ret = try_to_freeze();
 		__fs_reclaim_acquire();
 		if (ret || kthread_should_stop())
+		if (try_to_freeze() || kthread_should_stop() ||
+		    !atomic_read(&pgdat->kswapd_waiters))
 			break;
 
 		/*
