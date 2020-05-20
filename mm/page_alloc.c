@@ -4578,6 +4578,8 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	task_cputime(current, &utime, &stime_s);
 	pg_data_t *pgdat = ac->preferred_zoneref->zone->zone_pgdat;
 
+
+
 	bool woke_kswapd = false;
 	bool used_vmpressure = false;
 
@@ -4636,7 +4638,7 @@ retry_cpuset:
 
 	if (gfp_mask & __GFP_KSWAPD_RECLAIM) {
 		if (!woke_kswapd) {
-			atomic_inc(&pgdat->kswapd_waiters);
+			atomic_long_inc(&kswapd_waiters);
 			woke_kswapd = true;
 		}
 		wake_all_kswapds(order, ac);
@@ -4886,7 +4888,7 @@ got_pg:
 
 
 	if (woke_kswapd)
-		atomic_dec(&pgdat->kswapd_waiters);
+		atomic_long_dec(&kswapd_waiters);
 	if (!page)
 		warn_alloc(gfp_mask, ac->nodemask,
 				"page allocation failure: order:%u", order);

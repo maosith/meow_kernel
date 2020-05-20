@@ -6104,12 +6104,17 @@ restart:
 		__fs_reclaim_release();
 		ret = try_to_freeze();
 		__fs_reclaim_acquire();
+
 		if (ret || kthread_should_stop())
 		if (try_to_freeze() || kthread_should_stop() ||
 		    !atomic_long_read(&kswapd_waiters))
 
 		if (try_to_freeze() || kthread_should_stop() ||
 		    !atomic_read(&pgdat->kswapd_waiters))
+
+
+		if (ret || kthread_should_stop() ||
+		    !atomic_long_read(&kswapd_waiters))
 
 			break;
 
