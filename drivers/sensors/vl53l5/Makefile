@@ -97,7 +97,7 @@ endif
 LOG_ENABLE = TRUE
 
 ifeq "$(LOG_ENABLE)" "TRUE"
-
+  
   ccflags-y += -DVL53L5_KERNEL_LOG
 endif
 
@@ -128,11 +128,9 @@ ifeq "$(BUILD_TYPE)" "DEBUG"
   ccflags-y += -DDEBUG
 endif
 
-
 ifeq "$(BUILD_TYPE)" "RELEASE"
  
 endif
-
 
 
 KERNEL_DRIVER_OBJS = \
